@@ -8,6 +8,17 @@
 
 ## 0. Rules for AI agents working from this file
 
+### Current project status — 26 Nov 2026
+
+This brief remains the project source of truth. Detailed experiment definitions live in [`docs/experiment-design.md`](experiment-design.md); implementation and local run instructions live in [`README.md`](../README.md).
+
+- Local Flagsmith Docker setup, the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants are already present. Do not recreate or alter them.
+- Phase 1 backend foundation is implemented in TypeScript/Fastify with environment validation, a Flagsmith adapter, the four requested routes, an accessible HTML view, and in-memory per-identity event de-duplication.
+- The lockfile currently resolves `@flagsmith/nodejs` 9.5.0. Its declarations were inspected. `npm run typecheck` passes and `npm test` passes (11 tests).
+- Tests mock Flagsmith. No live exposures or conversions have been verified. No experiment has been created or started, and no dashboard configuration has been changed.
+- The simulator, results/rollout scripts, and a real pilot remain future work. Experiment creation starts it immediately; creation and starting require explicit approval.
+- `.env`, Flagsmith credentials, and `docker-compose.yml` were not changed. `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); these have not been triaged.
+
 1. **Never invent Flagsmith APIs.** Every technical claim is tagged:
    - `[VERIFIED]` — read in official docs / hackathon pages during research.
    - `[UNVERIFIED]` — from secondary sources or memory; confirm before relying on it or saying it in the demo.
@@ -149,10 +160,14 @@ Events are **buffered** and sent in batches — flush before the process exits.
 
 - **Exposure:** `getExperimentFlag(<flag>, <identity>)` evaluates the flag and records a `$flag_exposure` event with the served variant — **only if** the flag exists, is enabled and the identity is enrolled in the experiment. Node form from docs: `await flagsmith.getExperimentFlag('checkout_button', 'user_42')`. `[VERIFIED]` Python equivalent: `get_experiment_flag(feature_name, identifier, traits=None)`; it skips emission for a default flag. `[VERIFIED]`
 - If you evaluate in one place and render in another, call the exposure-tracking method at the point of display (e.g. `track_exposure_event`). Exposures are **deduplicated per identity+variant within a flush window**. `[VERIFIED]`
-- **Conversion event:** `track_event`/`trackEvent` — the name must match the metric's event exactly. **Exact Node signature and how to pass a numeric value:** `[TODO-CHECK]` (docs → Run an Experiment → Node.js tab).
-- **Flush:** Node.js `await close()`; JS `await flushEvents()`; Python `EventProcessorConfig(max_buffer_items=1)`. `[VERIFIED]` Whether Node offers a flush *without* closing (we run a long-lived server) `[TODO-CHECK]` — fallback: run app and simulator in one process, or recreate the SDK client per run and `close()` it at the end.
+- **Conversion event:** Event names must exactly match the metric event and the same identity used for exposure must be used for conversion. The installed Node SDK 9.5.0 declaration is `trackEvent(event, opts?)`, where `opts` can contain `identifier` and optional `value`; occurrence events use `trackEvent(event, { identifier: uid })` with no value. `[VERIFIED AGAINST INSTALLED TYPES]`
+- **Flush:** Await Node.js `close()` during graceful shutdown. The installed type is `close(timeoutMs?): Promise<void>` and closes polling while flushing buffered events. `[VERIFIED AGAINST INSTALLED TYPES]`
 
-### 4.3 Setup through CLI/API (from Flagsmith's official agent prompt) `[VERIFIED]`
+> The Run an Experiment page shows a positional Node `trackEvent` example, while the installed 9.5.0 TypeScript declaration uses an options object. The implementation follows the installed declaration. Recheck if the lockfile changes.
+
+### 4.3 CLI/API setup notes — not current instructions
+
+> **Do not run the commands or payloads in the historical example below.** The existing project, flag, and variants already exist. The example has not been re-verified against the current CLI/API. In particular, do not use any feature-create or variant-add command here. Official Create an Experiment documentation says creating one starts it immediately; there is no documented draft-only creation flow. Creating or starting one is approval-gated.
 
 Prereqs: Flagsmith instance with a connected warehouse; Flagsmith CLI v2+ (`curl -fsSL https://get.flagsmith.com | sh` or `brew install Flagsmith/tap/flagsmith`).
 
@@ -204,10 +219,7 @@ Make API calls with `flagsmith api <path>` (`--input -` reads a JSON body from s
 
 > Flagsmith's own agent prompt says **not** to use the Flagsmith MCP server for experiments — it can't start them. Use CLI + API.
 
-**Open items `[TODO-CHECK]`:**
-- Whether the experiment can carry **more than one metric** (the payload takes a `metrics` list — we want `complaint_submitted` as a second metric) and what `expected_direction` to use for a guardrail that should go *down* (docs only show `up`/`increase`). Read *Create Metrics* and *Create an Experiment*.
-- Whether a **sum/mean** metric (for the optional revenue metric) takes its value from an event value, and how to send it.
-- Exact allocation behaviour for the remainder to control.
+**Current measurement decision:** `subscription_retained` is the single Flagsmith primary metric. `complaint_submitted` is tracked as an event and independently analyzed from per-user simulation outcomes; do not claim Flagsmith reports both metrics in one experiment. The metrics docs confirm sum/mean use numeric event values; the experiment docs confirm the expected direction can be “should not increase” and control receives the remaining allocation. Multi-metric reporting is not assumed.
 
 ### 4.4 Hosting `[VERIFIED]`
 
@@ -357,13 +369,15 @@ Results reader (script) ──────────────────�
                                                     • Bayesian results + dashboard
 ```
 
-**Stack (proposed):** Node.js + TypeScript; `@flagsmith/nodejs` ≥ 9.1.0; Fastify (or Express); a seeded RNG (`seedrandom`) so runs are reproducible; Vitest for unit tests of the persona model. One language end to end. `[DECISION]`
+**Stack:** Node.js 20+, TypeScript, `@flagsmith/nodejs` (lockfile currently resolves 9.5.0), Fastify 4, and Vitest. Phase 1 is backend-only with an accessible HTML experience. React is acceptable for a later frontend if needed; it is not part of the current implementation. A seeded RNG and persona model belong to the later simulator phase. `[DECISION]`
 
 **Two faces of the same app:**
 - **Human-clickable UI** at `/account/cancel` so judges/video viewers can try all three flows by changing `?uid=` (the arm follows the user).
 - **Machine interface** (JSON) used by the simulator — much faster than driving a browser, which makes 6,000+ users cheap.
 
 ### 7.1 Repo layout
+
+The tree below is the intended later layout, not the exact current tree. Current Phase 1 files are `src/config.ts`, `src/experiment.ts`, `src/cancel-page.ts`, `src/flagsmith.ts`, `src/server.ts`, `src/index.ts`, `tests/config.test.ts`, and `tests/server.test.ts`, plus the package and TypeScript/Vitest configuration files. Not yet present: `config/personas.ts`, simulator, results reader, rollout/bootstrap scripts, `results/`, and demo/results documents.
 
 ```
 cancel-flow-experiment/
@@ -398,16 +412,16 @@ cancel-flow-experiment/
 
 | Route | Purpose |
 |---|---|
-| `GET /account/cancel?uid=` | Calls `getExperimentFlag('cancel_flow', uid)`; renders the arm. If not enrolled/default flag, treat as control **and log it** (not part of the experiment). `Accept: application/json` returns `{arm, offer}` |
-| `POST /account/cancel/action` | Body `{uid, action}`; `action ∈ {keep, accept_pause, accept_discount, cancel}`. If still subscribed afterwards → `track('subscription_retained', uid)` (**once per user**) |
-| `POST /account/complaint` | Body `{uid}`; only valid after a cancellation → `track('complaint_submitted', uid)` (once) |
-| `POST /admin/flush` | Flushes buffered events (see Section 4.2 flush `[TODO-CHECK]`) |
-| `GET /healthz` | Liveness |
+| `GET /account/cancel?uid=` | Implemented. Calls async `getExperimentFlag('cancel_flow', uid)` once per in-memory flow, returns accessible HTML or JSON when `Accept: application/json` is requested. Unknown/default values render control. |
+| `POST /account/cancel/action` | Implemented. Validates `{uid, action}`, enforces actions appropriate to the served arm, and tracks `subscription_retained` once for keep/accepted-offer outcomes. |
+| `POST /account/complaint` | Implemented. Only accepts a complaint after that identity's flow was cancelled and tracks `complaint_submitted` at most once. |
+| `GET /healthz` | Implemented liveness route. |
 
 Notes:
 - Identity: `u_<runId>_<n>`, never reused across runs.
-- State: in-memory user state per run is enough (no database).
+- State: in-memory user state per process is enough for this MVP (no database); state resets on restart.
 - Order matters: **identify/evaluate before the user acts**, and use the same `uid` everywhere.
+- SDK events close/flush through the Fastify shutdown hook. There is no `/admin/flush` route.
 
 ### 8.2 Simulator
 
@@ -433,7 +447,7 @@ At the end: flush events, wait ~1 minute, refresh results (≤ once per 5 min), 
 
 ### 8.4 Bootstrap script
 
-Idempotent: create flag + keyed variants, metrics, experiment (not started), print the dashboard URL. Uses Section 4.3 commands.
+Not implemented and intentionally excluded from Phase 1. Any future setup automation must inspect and reuse the existing project, flag, and variants; experiment creation is an immediate start and requires explicit approval.
 
 ---
 
@@ -458,24 +472,32 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 
 ### Phase 0 — Before kickoff (now → 26 Nov 8 AM IST)
 - [ ] Register on WeMakeDevs; read **Rules** and **Schedule** pages (submission format, video length, "fresh code" rules).
-- [ ] Install Docker, Node 20+, the Flagsmith CLI.
-- [ ] Boot Flagsmith locally with `EXPERIMENTATION_ENABLED=true`; confirm the Warehouse tab appears and a warehouse connection exists.
-- [ ] Resolve every `[TODO-CHECK]` that doesn't need project code (multi-metric, guardrail direction, Node `trackEvent` signature, flush).
+- [x] Node.js 20+ is installed and local Flagsmith setup is reported complete.
+- [ ] Confirm Flagsmith CLI installation and verify the Warehouse tab/connection in the dashboard during the next manual setup check.
+- [x] Verify the experiment, metrics, and run docs; inspect the installed Node SDK declarations. See Section 4.2 and the status caveat on the docs' Node event signature.
 - [ ] Star `github.com/Flagsmith/flagsmith`.
 - ⚠ Don't write project code before the event starts if the rules prohibit pre-existing code. Prepare environment and notes only. `[TODO-CHECK rules]`
 
+**Phase 0 status:** local Flagsmith setup is reported complete. We have not re-verified the current dashboard state in this coding session. CLI installation, hackathon Rules/Schedule, and repository pre-event rules remain unchecked.
+
 ### Phase 1 — Vertical slice (hours 0–6)
 - [ ] Create repo; commit `docs/experiment-design.md` (hypothesis, metrics, decision rule) as **commit #1**.
-- [ ] `bootstrap-flagsmith.sh` creates flag, variants (with keys), the primary metric, the experiment.
-- [ ] Minimal server: `GET /account/cancel` calls `getExperimentFlag`; `POST` action sends `subscription_retained`.
-- [ ] Send **5–10 test users**; **see exposures and conversions appear in Flagsmith**. This is the proof the pipeline works. If it doesn't by hour 6, ask in the Flagsmith Discord and check Section 3.3.
+- [x] Create the project foundation: `package.json`/lockfile, TypeScript and Vitest configuration, environment validation.
+- [x] Implement the mockable Flagsmith adapter with async flag evaluation, occurrence event tracking, and `close()` on server shutdown.
+- [x] Implement `/healthz`, `/account/cancel`, `/account/cancel/action`, and `/account/complaint`, including JSON and accessible HTML, validation, same-identity use, and in-memory duplicate prevention.
+- [x] Run `npm run typecheck` and `npm test`: typecheck passes; 11 unit tests pass with Flagsmith mocked.
+- [ ] Commit the project files. Current worktree has uncommitted changes; the design document is not yet a commit.
+- [ ] Run a 5–10 identity live pilot and verify events in Flagsmith. This is approval-gated because the experiment must be created and starts immediately; no experiment has been created or started.
+- [ ] Create the experiment setup script. **Do not implement this as part of Phase 1**: existing project/flag/variants must be reused, and no setup script may create an experiment without explicit approval.
+
+**Phase 1 status:** backend and mocked verification are complete. Live Flagsmith exposure/conversion verification remains outstanding and must not be claimed yet.
 
 ### Phase 2 — Full app and simulator (hours 6–20)
-- [ ] Three UI templates (control/pause/discount) with equal button prominence.
-- [ ] Add `complaint_submitted` metric and route.
+- [x] Accessible HTML for control/pause/discount with equal cancellation button styling and one-click cancellation.
+- [x] Complaint route and `complaint_submitted` event tracking are implemented. Flagsmith metric setup remains unconfigured and approval-gated.
 - [ ] `model.ts` + `config/personas.ts` with unit tests (rates converge to the config over many draws).
 - [ ] `simulate.ts` with seeded RNG, interleaving, CSV log.
-- [ ] Pilot run (~300 users): check split, event counts, flushing.
+- [ ] Pilot run (~300 users): check split, event counts, flushing. Depends on approval to start the experiment.
 
 ### Phase 3 — Real run (hours 20–36)
 - [ ] Start the experiment; run 2,000–3,000 users per arm.
@@ -507,9 +529,10 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 |---|---|---|
 | "It's all fake data" | Judges discount the result | Disclose loudly; publish the model; ground-truth check; A/A run; frame the project as a **method + pipeline** |
 | Experimentation is **beta**; local warehouse setup friction | Lose hours | Do local setup before kickoff; keep Cloud as fallback; ask in Discord early |
-| Node `trackEvent` / flush behaviour differs from assumptions | Events missing | Confirm in docs (Phase 0); test 5 users in Phase 1; follow Section 3.3 troubleshooting |
+| SDK docs' Node event example differs from installed SDK typings | Events missing | Implementation follows the locked package declaration (`trackEvent(event, { identifier })` for occurrence); recheck when SDK version changes |
+| Dependencies have unresolved npm audit advisories | Dependency risk | `npm install` reported 6 advisories (1 moderate, 3 high, 2 critical); triage before any production use |
 | Effects too small to detect | Inconclusive result | Increase users (cheap); tune config after the pilot; remember Flagsmith shows "Collecting data" below 50 identities/5 conversions |
-| Guardrail/multi-metric support differs from assumption | Design change | Phase 0 check; fallback: report complaint rate from Flagsmith's data where available, and from our own raw CSV as a cross-check, stating which is which |
+| Flagsmith experiment supports only one primary metric in the documented wizard | Guardrail may not appear in experiment results | Keep `subscription_retained` as the sole Flagsmith primary; calculate `complaint_submitted` independently from per-user simulation outcomes |
 | Dark-pattern optics | Credibility hit | Equal button prominence; inline offers; ethics rule (Section 0) |
 | Regulatory claims quoted wrongly | Credibility hit | Treat as `[UNVERIFIED]`; verify against primary sources or omit |
 | Identity mismatch between exposure and event | No conversions counted | One `uid` generated once per user and used everywhere; unit test |
@@ -599,12 +622,14 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 |---|---|
 | Event dates, tracks, prizes, scorecard, FAQ (simulated traffic OK, solo OK) | `[VERIFIED]` |
 | Experiment lifecycle and results semantics (50 identities / 5 conversions, SRM, quarantine, 5-min refresh, 95% banner) | `[VERIFIED]` |
-| SDK minimum versions; flush methods; common failure causes | `[VERIFIED]` |
-| CLI/API calls and payload shapes in Section 4.3 | `[VERIFIED]` (from Flagsmith's official prompt) |
+| SDK minimum versions; exposure identity behavior; documented flush lifecycle; common failure causes | `[VERIFIED]` |
+| Installed Node SDK 9.5.0 types for initialization, async `getExperimentFlag`, `trackEvent` options, and `close()` | `[VERIFIED AGAINST INSTALLED TYPES; see Section 4.2]` |
+| CLI/API commands and payload examples in Section 4.3 | `[UNVERIFIED HISTORICAL NOTES; DO NOT RUN]` |
 | Self-hosting: `EXPERIMENTATION_ENABLED=true`, DB vs warehouse modes, Docker Compose includes experimentation | `[VERIFIED]` |
 | FTC/ROSCA regulatory summary in Section 5.1 | `[UNVERIFIED]` (law-firm commentary; not legal advice) |
 | Persona probabilities and expected rates in Section 6.4 | **Our own assumptions**, not data |
-| Node `trackEvent` signature; flush without close; multi-metric experiments; guardrail direction; sum-metric values; remainder allocation | `[TODO-CHECK]` |
+| Whether a second metric can be reported in one experiment | Not assumed; guardrail is independently analyzed |
+| Guardrail direction, sum/mean event values, and remainder allocation | `[VERIFIED]` in official Create Metrics/Create an Experiment docs |
 | Rules page requirements (video length, submission format, code-before-event) | `[TODO-CHECK]` |
 
 ---

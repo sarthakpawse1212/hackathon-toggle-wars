@@ -1,32 +1,67 @@
-# Cancel Flow Experiment
+# Cancel-Flow Experiment
 
-An experimentation project built with Flagsmith for the WeMakeDevs × Flagsmith Toggle Wars Hackathon.
+A small Flagsmith experimentation project for the WeMakeDevs × Flagsmith Toggle Wars hackathon.
 
 ## Experiment
 
-Testing three subscription cancellation experiences:
+The existing `cancel_flow` flag serves three experiences: one-click cancellation (`control`), an inline one-month pause offer (`pause`), and an inline 30% discount for three months (`discount`). Cancellation remains one click away and equally visible in every variant.
 
-- **Control:** One-click cancellation
-- **Pause:** Offer a one-month subscription pause
-- **Discount:** Offer 30% off for three months
+The primary metric is `subscription_retained`. `complaint_submitted` is an independently analyzed guardrail calculated from per-user outcomes; this project does not assume Flagsmith reports it as a second experiment metric.
 
-## Current Progress
+**All user behavior is simulated.** Outcomes demonstrate the event pipeline and the stated model; they are not real customer data or evidence about actual subscribers.
 
-- [x] Local Flagsmith setup using Docker
-- [x] Flagsmith project created
-- [x] `cancel_flow` feature flag created
-- [x] Pause and discount variants configured
-- [ ] Backend implementation
-- [ ] Experiment event tracking
-- [ ] Traffic simulation
-- [ ] Results analysis
+## Current implementation
 
-## Local Setup
+**Progress as of 26 Nov 2026:** Phase 1 backend and mocked verification are complete. TypeScript validation passes and all 11 unit tests pass. No live Flagsmith exposure or conversion has been verified.
 
-See [Flagsmith Local Setup Guide](docs/flagsmith-local-setup-windows.md).
+- [x] Local Flagsmith Docker setup and existing `cancel-flow` project
+- [x] Existing `cancel_flow` flag and variants
+- [x] Experiment design and pre-registered decision rule
+- [x] TypeScript/Fastify API with mockable Flagsmith adapter
+- [x] Unit tests for request validation, identity consistency, duplicate events, and cancellation visibility
+- [ ] Run an approved pilot against a started Flagsmith experiment
+- [ ] Traffic simulator and results analysis
 
-## Experiment Design
+The latest `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); they have not been triaged.
 
-See [Experiment Brief](docs/cancel-flow-experiment-brief.md).
+No experiment is created or started by this application. Creating an experiment starts it immediately, so that remains a separate approval-gated step.
 
-**Note:** Experiment outcomes will use simulated user behaviour and must not be presented as real customer data.
+## Local development
+
+Requires Node.js 20 or later. Install dependencies:
+
+```powershell
+npm install
+```
+
+Use the ignored `.env` file for local settings. Compare with [.env.example](.env.example), but do not overwrite an existing `.env` file. Set `FLAGSMITH_SERVER_KEY` to the local server-side environment key; never commit or print it. The local API and event URLs in the example use the Flagsmith database warehouse endpoints.
+
+Start the API:
+
+```powershell
+npm run dev
+```
+
+The server listens on port 3000 by default. Routes:
+
+- `GET /healthz`
+- `GET /account/cancel?uid=u_demo_1` — JSON when sent `Accept: application/json`, otherwise the accessible HTML experience
+- `POST /account/cancel/action` — JSON body `{ "uid": "u_demo_1", "action": "cancel" }`
+- `POST /account/complaint` — JSON body `{ "uid": "u_demo_1" }`, valid only after cancellation
+
+The service stores flow state in memory. Restarting it clears that state. No database, auth, simulator, results script, or rollout script is included in this phase.
+
+Run checks:
+
+```powershell
+npm run typecheck
+npm test
+```
+
+The unit tests mock Flagsmith and do not require a running experiment. They do not establish that real exposures or conversions reached the Flagsmith dashboard.
+
+## Project docs
+
+- [Experiment design](docs/experiment-design.md)
+- [Project brief](docs/cancel-flow-experiment-brief.md)
+- [Windows Flagsmith local setup](docs/flagsmith-local-setup-windows.md)
