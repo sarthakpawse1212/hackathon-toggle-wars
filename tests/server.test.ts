@@ -44,7 +44,7 @@ describe('cancel-flow routes', () => {
     const response = await app.inject({ url: '/account/cancel?uid=u_run_1', headers: { accept: 'application/json' } });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
-      uid: 'u_run_1', arm: 'pause', offer: 'Pause your subscription for one month?',
+      uid: 'u_run_1', arm: 'pause', enrolled: true, offer: 'Pause your subscription for one month?',
       cancellation: { available: true, oneClick: true, label: 'Cancel anyway' },
     });
     expect(flagsmith.getExperimentFlag).toHaveBeenCalledTimes(1);

@@ -1,7 +1,7 @@
 # Cancel-Flow Experiment Design
 
 **Project:** WeMakeDevs × Flagsmith Toggle Wars, Track 01 — Test Something Real  
-**Status (26 Nov 2026):** Phase 1 backend is implemented; TypeScript validation passes and all 11 unit tests pass with Flagsmith mocked. No experiment has been created or started, and no live exposures/conversions have been verified. All user outcomes are simulated.
+**Status (27 Nov 2026):** Phase 1 backend and Phase 2 seeded model/simulator are implemented; TypeScript validation passes and all 21 unit tests pass. The server verifies experiment enrollment before serving a treatment or tracking conversions. No experiment has been created or started, and no live exposures/conversions have been verified. All user outcomes are simulated.
 
 ## Hypothesis
 
@@ -94,9 +94,13 @@ These expected values are arithmetic consequences of the assumptions. The intend
 
 Build a minimal TypeScript Fastify backend with the existing flag integration, in-memory per-user state, and a small accessible HTML experience plus JSON responses for a simulator. No database, authentication, payments, browser automation, simulator, results script, or rollout script in this phase.
 
-The routes are `GET /healthz`, `GET /account/cancel?uid=...`, `POST /account/cancel/action`, and `POST /account/complaint`. Evaluate the flag at the point the experience is returned. Accept only the action appropriate to the served arm; use the same `uid` throughout; record retention only for an ending state that is still subscribed; permit complaints only after cancellation; prevent duplicate outcome events in process memory. Flush buffered SDK events with `close()` during graceful shutdown.
+The routes are `GET /healthz`, `GET /account/cancel?uid=...`, `POST /account/cancel/action`, and `POST /account/complaint`. Evaluate the flag at the point the experience is returned. Treat identities without `flag.experiment?.inExperiment === true` as control, log the fallback, and suppress their conversion events. Accept only the action appropriate to the served arm; use the same `uid` throughout; record retention only for an enrolled identity whose ending state is still subscribed; permit complaints only after cancellation; prevent duplicate outcome events in process memory. Flush buffered SDK events with `close()` during graceful shutdown.
 
 Phase 1 code and unit tests do not require a running experiment. When no experiment is running, the SDK may evaluate the normal flag configuration; do not claim exposures or conversions were recorded until verified in Flagsmith. The 5–10 user pilot is a later manual step and requires approval to start/run the experiment.
+
+## Phase 2 simulator behavior
+
+`config/personas.ts` contains the hand-authored shares and conditional outcome probabilities above. `src/model.ts` uses a seeded PRNG for repeatable persona and behavior draws. The simulator draws each persona before requesting the API, asks the existing server for the arm, then simulates behavior for that served arm; it never chooses an arm itself. Synthetic identities are unique per run, requests are shuffled, and CSV output marks every row `simulated=true`. Non-enrolled identities are reported as fallback control and excluded from outcome rates. The simulator does not create or start an experiment.
 
 ## Verified Flagsmith details
 

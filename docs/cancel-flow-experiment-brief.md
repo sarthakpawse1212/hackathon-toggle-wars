@@ -8,16 +8,15 @@
 
 ## 0. Rules for AI agents working from this file
 
-### Current project status — 26 Nov 2026
+### Current project status — 27 Nov 2026
 
 This brief remains the project source of truth. Detailed experiment definitions live in [`docs/experiment-design.md`](experiment-design.md); implementation and local run instructions live in [`README.md`](../README.md).
 
 - Local Flagsmith Docker setup, the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants are already present. Do not recreate or alter them.
-- Phase 1 backend foundation is implemented in TypeScript/Fastify with environment validation, a Flagsmith adapter, the four requested routes, an accessible HTML view, and in-memory per-identity event de-duplication.
-- The lockfile currently resolves `@flagsmith/nodejs` 9.5.0. Its declarations were inspected. `npm run typecheck` passes and `npm test` passes (11 tests).
-- Tests mock Flagsmith. No live exposures or conversions have been verified. No experiment has been created or started, and no dashboard configuration has been changed.
-- The simulator, results/rollout scripts, and a real pilot remain future work. Experiment creation starts it immediately; creation and starting require explicit approval.
-- `.env`, Flagsmith credentials, and `docker-compose.yml` were not changed. `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); these have not been triaged.
+- Phase 1 backend foundation is implemented in TypeScript/Fastify with environment validation, a Flagsmith adapter, the four requested routes, an accessible HTML view, and in-memory per-identity event de-duplication. The adapter checks `flag.experiment?.inExperiment === true`; non-enrolled identities see control, are logged, and do not emit conversions.
+- Tests mock Flagsmith. Typecheck passes and 21 tests pass across Phases 1 and 2 (13 were present at Phase 1 completion). No live exposures or conversions have been verified. No experiment has been created or started, and no dashboard configuration has been changed.
+- Results/rollout scripts and a live pilot remain future work. The seeded simulator is implemented but has not been run against the local server or Flagsmith. Experiment creation starts it immediately; creation and starting require explicit approval.
+- `.env`, Flagsmith credentials, and `docker-compose.yml` were not changed. `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); remediation is deferred for now per the user's instruction.
 
 1. **Never invent Flagsmith APIs.** Every technical claim is tagged:
    - `[VERIFIED]` — read in official docs / hackathon pages during research.
@@ -165,59 +164,13 @@ Events are **buffered** and sent in batches — flush before the process exits.
 
 > The Run an Experiment page shows a positional Node `trackEvent` example, while the installed 9.5.0 TypeScript declaration uses an options object. The implementation follows the installed declaration. Recheck if the lockfile changes.
 
-### 4.3 CLI/API setup notes — not current instructions
+### 4.3 Existing Flagsmith configuration and experiment lifecycle
 
-> **Do not run the commands or payloads in the historical example below.** The existing project, flag, and variants already exist. The example has not been re-verified against the current CLI/API. In particular, do not use any feature-create or variant-add command here. Official Create an Experiment documentation says creating one starts it immediately; there is no documented draft-only creation flow. Creating or starting one is approval-gated.
+The local `cancel-flow` project, `cancel_flow` multivariate flag, and `control`/`pause`/`discount` variations are already configured. Use the existing resources; do not recreate or modify them as part of the current phase.
 
-Prereqs: Flagsmith instance with a connected warehouse; Flagsmith CLI v2+ (`curl -fsSL https://get.flagsmith.com | sh` or `brew install Flagsmith/tap/flagsmith`).
+The official [Create an Experiment documentation](https://docs.flagsmith.com/experimentation/create-an-experiment) states that creating an experiment starts it immediately. No draft-only creation flow is documented. Do not create or start an experiment without explicit approval. Before any approved live setup, re-verify the current dashboard/API instructions against official documentation rather than relying on old CLI or API payload examples.
 
-```bash
-flagsmith login                              # Cloud; local: source <path>/flagsmith.env
-flagsmith project list
-flagsmith environment list --project <project>
-flagsmith init --project <project> --environment <environment key>
-
-# Multivariate flag. `control` is reserved for the flag's own value; EVERY variation needs a key.
-flagsmith feature create cancel_flow --value control --enabled
-flagsmith feature variant add cancel_flow --value pause    --key pause    --weight 0
-flagsmith feature variant add cancel_flow --value discount --key discount --weight 0
-flagsmith feature get cancel_flow --json
-```
-
-Create a metric (event names are case-sensitive; must equal what the code sends):
-
-```
-POST api/v1/environments/<env key>/experiment-metrics/
-{"name":"Subscription retained","aggregation":"occurrence","direction":"up",
- "definition":{"version":1,"event":"subscription_retained"}}
-```
-
-Create the experiment (**do not start yet** — starting locks the flag and turns on the rollout):
-
-```
-POST api/v1/environments/<env key>/experiments/
-{"feature":<flag id>,"name":"Cancel flow: pause vs discount",
- "hypothesis":"<see Section 5.2>",
- "metrics":[{"metric":<metric id>,"expected_direction":"increase"}],
- "experiment_rollout":{"enabled":true,"rollout_percentage":100,
-   "feature_state_value":{"type":"string","value":"control"},
-   "multivariate_feature_state_values":[
-     {"multivariate_feature_option":<pause id>,"percentage_allocation":33},
-     {"multivariate_feature_option":<discount id>,"percentage_allocation":33}]}}
-```
-
-Each variation gets its `percentage_allocation`; control receives the rest.
-
-```
-POST api/v1/environments/<env key>/experiments/<id>/start/
-POST api/v1/environments/<env key>/experiments/<id>/results/refresh/   # at most once per 5 min
-GET  api/v1/environments/<env key>/experiments/<id>/results/
-GET  api/v1/environments/<env key>/warehouse-connections/              # must be non-empty
-```
-
-Make API calls with `flagsmith api <path>` (`--input -` reads a JSON body from stdin). Dashboard URL pattern: `<dashboard>/project/<project id>/environment/<env key>/experiments/<id>` (`https://app.flagsmith.com` on Cloud, `http://localhost:8000` locally).
-
-> Flagsmith's own agent prompt says **not** to use the Flagsmith MCP server for experiments — it can't start them. Use CLI + API.
+Official [Run an Experiment](https://docs.flagsmith.com/experimentation/run-an-experiment) and [Create Metrics](https://docs.flagsmith.com/experimentation/create-metrics) pages are the technical references for implementation and measurement. The local instance uses `http://localhost:8000/api/v1/` as `apiUrl` and `http://localhost:8000/api/` as `eventsApiUrl` for the Flagsmith database warehouse.
 
 **Current measurement decision:** `subscription_retained` is the single Flagsmith primary metric. `complaint_submitted` is tracked as an event and independently analyzed from per-user simulation outcomes; do not claim Flagsmith reports both metrics in one experiment. The metrics docs confirm sum/mean use numeric event values; the experiment docs confirm the expected direction can be “should not increase” and control receives the remaining allocation. Multi-metric reporting is not assumed.
 
@@ -274,7 +227,7 @@ One multivariate flag `cancel_flow`, assigned **per user** (identity), server-si
 
 Ethics constraints (non-negotiable): offer is **inline on the same screen** (no extra pages); "Cancel anyway" is **same size/prominence** as the offer button; no guilt-trip copy; cancel is always one click.
 
-Allocation: 100% of users who open the cancel page enter the experiment; `pause` 33%, `discount` 33%, control the remainder. `[TODO-CHECK]`
+Allocation: 100% of users who open the cancel page enter the experiment; `pause` 33%, `discount` 33%, control the remainder. Flagsmith's experiment docs confirm control receives the remainder when variation allocations total 100%. `[VERIFIED]`
 
 ### 6.2 Metrics
 
@@ -283,8 +236,8 @@ Flagsmith metrics are per-user occurrence/count/sum/mean. We send an event **onl
 | Event | Role | Sent when | Direction |
 |---|---|---|---|
 | **`subscription_retained`** | **Primary** | The user ends the flow still subscribed (accepted pause, accepted discount, or backed out) | up |
-| **`complaint_submitted`** | **Guardrail** | The user files a complaint after the flow ended in cancellation | down `[TODO-CHECK]` |
-| `retained_revenue` *(optional, stretch)* | Revenue sanity check | Sum of monthly revenue kept; discount keeps users at a lower price | up `[TODO-CHECK]` |
+| **`complaint_submitted`** | **Guardrail** | The user files a complaint after the flow ended in cancellation | should not increase (independently analyzed from per-user simulation results) `[VERIFIED]` |
+| `retained_revenue` *(optional, stretch)* | Revenue sanity check | Sum of monthly revenue kept; discount keeps users at a lower price. Sum metrics require a numeric event value. | up `[VERIFIED; STRETCH ONLY]` |
 
 **Definitions are fixed before the first run** (so no one can accuse us of choosing metrics after seeing results). Write them in `docs/experiment-design.md` at commit #1.
 
@@ -369,7 +322,7 @@ Results reader (script) ──────────────────�
                                                     • Bayesian results + dashboard
 ```
 
-**Stack:** Node.js 20+, TypeScript, `@flagsmith/nodejs` (lockfile currently resolves 9.5.0), Fastify 4, and Vitest. Phase 1 is backend-only with an accessible HTML experience. React is acceptable for a later frontend if needed; it is not part of the current implementation. A seeded RNG and persona model belong to the later simulator phase. `[DECISION]`
+**Stack:** Node.js 20+, TypeScript, `@flagsmith/nodejs` (lockfile currently resolves 9.5.0), Fastify 4, and Vitest. Phase 1 delivered the backend and accessible HTML experience; Phase 2 adds the seeded persona model and HTTP simulator. React is acceptable for a later frontend if needed; it is not part of the current MVP. `[DECISION]`
 
 **Two faces of the same app:**
 - **Human-clickable UI** at `/account/cancel` so judges/video viewers can try all three flows by changing `?uid=` (the arm follows the user).
@@ -377,7 +330,7 @@ Results reader (script) ──────────────────�
 
 ### 7.1 Repo layout
 
-The tree below is the intended later layout, not the exact current tree. Current Phase 1 files are `src/config.ts`, `src/experiment.ts`, `src/cancel-page.ts`, `src/flagsmith.ts`, `src/server.ts`, `src/index.ts`, `tests/config.test.ts`, and `tests/server.test.ts`, plus the package and TypeScript/Vitest configuration files. Not yet present: `config/personas.ts`, simulator, results reader, rollout/bootstrap scripts, `results/`, and demo/results documents.
+The tree below is the intended later layout, not the exact current tree. Current files include `config/personas.ts`, `src/config.ts`, `src/experiment.ts`, `src/model.ts`, `src/cancel-page.ts`, `src/flagsmith.ts`, `src/server.ts`, `src/index.ts`, `scripts/simulate.ts`, and tests for config, server, model, and simulator, plus the package and TypeScript/Vitest configuration files. Not yet present: results reader, rollout/bootstrap scripts, generated `results/` data, and demo/results documents.
 
 ```
 cancel-flow-experiment/
@@ -412,9 +365,9 @@ cancel-flow-experiment/
 
 | Route | Purpose |
 |---|---|
-| `GET /account/cancel?uid=` | Implemented. Calls async `getExperimentFlag('cancel_flow', uid)` once per in-memory flow, returns accessible HTML or JSON when `Accept: application/json` is requested. Unknown/default values render control. |
-| `POST /account/cancel/action` | Implemented. Validates `{uid, action}`, enforces actions appropriate to the served arm, and tracks `subscription_retained` once for keep/accepted-offer outcomes. |
-| `POST /account/complaint` | Implemented. Only accepts a complaint after that identity's flow was cancelled and tracks `complaint_submitted` at most once. |
+| `GET /account/cancel?uid=` | Implemented. Calls async `getExperimentFlag('cancel_flow', uid)` once per in-memory flow. Only an enabled, non-default flag with `experiment.inExperiment === true` can serve a treatment; otherwise it logs the fallback and renders control. Returns accessible HTML or JSON when `Accept: application/json` is requested. |
+| `POST /account/cancel/action` | Implemented. Validates `{uid, action}`, enforces actions appropriate to the served arm, and tracks `subscription_retained` once only for enrolled identities who finish subscribed. |
+| `POST /account/complaint` | Implemented. Only accepts a complaint after cancellation and tracks `complaint_submitted` at most once only for enrolled identities. |
 | `GET /healthz` | Implemented liveness route. |
 
 Notes:
@@ -425,7 +378,7 @@ Notes:
 
 ### 8.2 Simulator
 
-Parameters: `--users 6000 --seed 42 --run-id r1`.
+Parameters: `--users 6000 --seed 42 --run-id <unique-id> --timeout-ms 10000`. The run ID is generated uniquely if omitted; explicit IDs are exclusive and may never be reused.
 
 For each user (interleave randomly; don't run one arm first):
 1. Draw persona from the mix (seeded).
@@ -433,7 +386,7 @@ For each user (interleave randomly; don't run one arm first):
 3. Decide using `P(retained | persona, arm)` → action.
 4. `POST` the action.
 5. If cancelled, draw `P(complaint | persona, arm)` → maybe `POST` complaint.
-6. Log the raw outcome row to `results/<run-id>.csv` (uid, persona, arm, retained, complaint).
+6. Log the raw outcome row to `results/<run-id>.csv` (uid, persona, arm, enrolled, retained, complaint, `simulated=true`).
 
 At the end: flush events, wait ~1 minute, refresh results (≤ once per 5 min), fetch results.
 
@@ -470,7 +423,7 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 
 > Smaller than a browser-automation project, so we have slack. Use it for validation and polish, not extra features.
 
-### Phase 0 — Before kickoff (now → 26 Nov 8 AM IST)
+### Phase 0 — Before kickoff (before 26 Nov 8 AM IST)
 - [ ] Register on WeMakeDevs; read **Rules** and **Schedule** pages (submission format, video length, "fresh code" rules).
 - [x] Node.js 20+ is installed and local Flagsmith setup is reported complete.
 - [ ] Confirm Flagsmith CLI installation and verify the Warehouse tab/connection in the dashboard during the next manual setup check.
@@ -485,19 +438,22 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 - [x] Create the project foundation: `package.json`/lockfile, TypeScript and Vitest configuration, environment validation.
 - [x] Implement the mockable Flagsmith adapter with async flag evaluation, occurrence event tracking, and `close()` on server shutdown.
 - [x] Implement `/healthz`, `/account/cancel`, `/account/cancel/action`, and `/account/complaint`, including JSON and accessible HTML, validation, same-identity use, and in-memory duplicate prevention.
-- [x] Run `npm run typecheck` and `npm test`: typecheck passes; 11 unit tests pass with Flagsmith mocked.
+- [x] Run `npm run typecheck` and `npm test`: typecheck passes; 13 unit tests pass with Flagsmith mocked, including enrollment suppression and identity checks.
 - [ ] Commit the project files. Current worktree has uncommitted changes; the design document is not yet a commit.
 - [ ] Run a 5–10 identity live pilot and verify events in Flagsmith. This is approval-gated because the experiment must be created and starts immediately; no experiment has been created or started.
 - [ ] Create the experiment setup script. **Do not implement this as part of Phase 1**: existing project/flag/variants must be reused, and no setup script may create an experiment without explicit approval.
 
-**Phase 1 status:** backend and mocked verification are complete. Live Flagsmith exposure/conversion verification remains outstanding and must not be claimed yet.
+**Phase 1 status (27 Nov 2026):** backend and mocked verification, including enrollment protection, are complete. Live Flagsmith exposure/conversion verification remains outstanding and must not be claimed yet.
 
-### Phase 2 — Full app and simulator (hours 6–20)
+### Phase 2 — Persona model and simulator (hours 6–20)
 - [x] Accessible HTML for control/pause/discount with equal cancellation button styling and one-click cancellation.
 - [x] Complaint route and `complaint_submitted` event tracking are implemented. Flagsmith metric setup remains unconfigured and approval-gated.
-- [ ] `model.ts` + `config/personas.ts` with unit tests (rates converge to the config over many draws).
-- [ ] `simulate.ts` with seeded RNG, interleaving, CSV log.
+- [x] `src/model.ts` + `config/personas.ts` with deterministic sampling and probability convergence tests.
+- [x] `scripts/simulate.ts` with seeded RNG, shuffled request order, synthetic identities, and labeled CSV outcomes.
+- [x] Simulator requests the served arm from the server and records enrollment separately; fallback identities are excluded from outcome rates.
 - [ ] Pilot run (~300 users): check split, event counts, flushing. Depends on approval to start the experiment.
+
+**Phase 2 status (27 Nov 2026):** the model and simulator are implemented and covered by unit tests. They have not been run against the local server or Flagsmith. A live pilot remains approval-gated; no experiment has been created or started.
 
 ### Phase 3 — Real run (hours 20–36)
 - [ ] Start the experiment; run 2,000–3,000 users per arm.

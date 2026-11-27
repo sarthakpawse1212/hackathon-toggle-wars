@@ -52,6 +52,7 @@ export function buildServer({ flagsmith }: ServerDependencies): FastifyInstance 
     const response = {
       uid,
       arm: flow.arm,
+      enrolled: flow.enrolled,
       offer: offerCopy(flow.arm) ?? null,
       cancellation: { available: true, oneClick: true, label: flow.arm === 'control' ? 'Cancel subscription' : 'Cancel anyway' },
     };

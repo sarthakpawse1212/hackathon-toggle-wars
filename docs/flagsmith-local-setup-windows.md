@@ -1,6 +1,8 @@
 # Flagsmith Local Setup (Windows)
 
-Use this checklist to set up the local Flagsmith instance for the Cancel-Flow Experiment.
+Use this guide to verify the local Flagsmith setup for the Cancel-Flow Experiment.
+
+**Current status (27 Nov 2026):** the user reports local setup is complete and the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants already exist. This guide is now for verification and recovery. Do not recreate or alter existing Flagsmith resources. The individual live dashboard/CLI checks below were not re-run in this review.
 
 ## 1. Prerequisites
 
@@ -45,16 +47,14 @@ On the first launch, use **Get Started** on the Welcome screen to create the adm
 
 > Keep the Docker Compose file and its data volumes. Use `docker compose down` to stop the services without deleting the stored data. Do not use `docker compose down -v` unless you intentionally want to delete the local data.
 
-## 3. Create the Flagsmith project and enable the warehouse
+## 3. Verify the existing project and warehouse
 
 1. Sign in at `http://localhost:8000`.
-2. Create a project named `cancel-flow`.
-3. Open the project's default environment (or create an environment).
+2. Open the existing `cancel-flow` project; do not create a duplicate.
+3. Open the environment already used by the application; do not create a replacement environment for this check.
 4. Open **Environment Settings → Warehouse**.
-5. Select **Flagsmith database**.
-6. Click **Enable** and confirm.
-7. Confirm that the warehouse connection shows **Connected**.
-8. Use **Send your first event** to verify that event ingestion works.
+5. Confirm that the existing Flagsmith database warehouse connection shows **Connected**. Do not change its configuration as part of this verification.
+6. If ingestion needs a smoke check, use a unique synthetic identity and an approved test event; do not reuse test identities in an experiment.
 
 For this project, the local URLs are:
 
@@ -137,19 +137,9 @@ flagsmith config
 
 The project and environment should now be selected for this repository.
 
-## 6. Create or verify the experiment flag
+## 6. Verify the existing experiment flag
 
-The `cancel_flow` flag was created manually in the local environment.
-
-To create it in a fresh environment, run:
-
-```bat
-flagsmith feature create cancel_flow --value control --enabled
-flagsmith feature variant add cancel_flow --value pause --key pause --weight 0
-flagsmith feature variant add cancel_flow --value discount --key discount --weight 0
-```
-
-Verify the flag:
+The `cancel_flow` flag and its variants already exist in the configured environment. Inspect them with:
 
 ```bat
 flagsmith feature get cancel_flow --json
@@ -163,7 +153,7 @@ Expected configuration:
 - Variants: `pause` and `discount`
 - Variant keys: `pause` and `discount`
 
-If the flag already exists, inspect it instead of creating it again.
+If the project or flag is missing from the selected environment, stop and verify the CLI environment selection with the project owner. Do not recreate it.
 
 ## 7. Configure the application environment file
 
@@ -249,6 +239,8 @@ docker compose down -v
 ```
 
 ## 9. Local setup completion checklist
+
+The user reports that local setup is complete. Treat this list as a manual verification checklist; unmarked items were not independently verified in the latest review.
 
 - [ ] Docker Desktop is running.
 - [ ] Flagsmith containers are running.

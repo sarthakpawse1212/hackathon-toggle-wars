@@ -12,17 +12,19 @@ The primary metric is `subscription_retained`. `complaint_submitted` is an indep
 
 ## Current implementation
 
-**Progress as of 26 Nov 2026:** Phase 1 backend and mocked verification are complete. TypeScript validation passes and all 11 unit tests pass. No live Flagsmith exposure or conversion has been verified.
+**Progress as of 27 Nov 2026:** Phase 1 and the Phase 2 persona model/simulator are implemented. TypeScript validation passes and all 21 unit tests pass. The simulator uses synthetic identities, a reproducible seed, Flagsmith-served arms, and explicitly labeled CSV outcomes. No live Flagsmith exposure or conversion has been verified.
 
 - [x] Local Flagsmith Docker setup and existing `cancel-flow` project
 - [x] Existing `cancel_flow` flag and variants
 - [x] Experiment design and pre-registered decision rule
 - [x] TypeScript/Fastify API with mockable Flagsmith adapter
-- [x] Unit tests for request validation, identity consistency, duplicate events, and cancellation visibility
+- [x] Enrollment protection: non-enrolled identities see control, are logged, and produce no conversion events
+- [x] Unit tests for request validation, identity consistency, enrollment handling, duplicate events, and cancellation visibility
+- [x] Seeded persona/outcome model and HTTP simulator with randomized request order and CSV output
 - [ ] Run an approved pilot against a started Flagsmith experiment
-- [ ] Traffic simulator and results analysis
+- [ ] Results analysis and run after explicit live-experiment approval
 
-The latest `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); they have not been triaged.
+The latest `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); remediation is deferred for now.
 
 No experiment is created or started by this application. Creating an experiment starts it immediately, so that remains a separate approval-gated step.
 
@@ -49,7 +51,19 @@ The server listens on port 3000 by default. Routes:
 - `POST /account/cancel/action` — JSON body `{ "uid": "u_demo_1", "action": "cancel" }`
 - `POST /account/complaint` — JSON body `{ "uid": "u_demo_1" }`, valid only after cancellation
 
-The service stores flow state in memory. Restarting it clears that state. No database, auth, simulator, results script, or rollout script is included in this phase.
+The service stores flow state in memory. Restarting it clears that state. No database, auth, results analysis script, or rollout script is included.
+
+### Run the disclosed simulator
+
+Start the API in one terminal, then in another run:
+
+```powershell
+npm run simulate -- --users 6000 --seed 42 --timeout-ms 10000 --base-url http://localhost:3000
+```
+
+If omitted, `--run-id` is generated uniquely and printed with the output path. Before any API request, the simulator exclusively reserves the run ID in `results/.<run-id>.reservation.json` and checks that the CSV and partial-output paths are free. A run ID is never reusable: completed and failed markers remain, and an interrupted process leaves its marker in `running` state. Do not delete or reuse a marker. For an explicit `--run-id`, any existing marker or output causes the simulator to stop before contacting the API. `--timeout-ms` defaults to 10000; timed-out requests are aborted, reported with the identity, and not retried.
+
+The simulator requests each identity's actual arm before simulating behavior, randomizes request order, and only publishes the CSV after all requests succeed. Output is written as `results/<run-id>.csv`; every row is marked `simulated=true`. Retention and complaint rates include enrolled identities only. If the experiment is not running, identities may fall back to control and conversion events will not be tracked; the script reports those identities separately. A live pilot and any experiment creation/start remain approval-gated.
 
 Run checks:
 
