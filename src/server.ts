@@ -44,7 +44,7 @@ export function buildServer({ flagsmith }: ServerDependencies): FastifyInstance 
       const assignment = await getCancelAssignment(flagsmith, uid);
       flow = { ...assignment, status: 'open', retentionEventSent: false, complaintEventSent: false };
       if (!flow.enrolled) {
-        app.log.warn({ feature: 'cancel_flow', identity: uid }, 'Identity is not enrolled; rendering control and suppressing conversion events.');
+        app.log.warn({ feature: 'cancel_flow', identity: uid }, 'Identity is not enrolled in an active experiment; experiment conversion events are suppressed.');
       }
       flows.set(uid, flow);
     }

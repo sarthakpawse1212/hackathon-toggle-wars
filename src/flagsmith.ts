@@ -40,10 +40,17 @@ export function createFlagsmith(config: AppConfig): Flagsmith {
 
 export async function getCancelAssignment(client: FlagsmithPort, uid: string): Promise<CancelAssignment> {
   const flag = await client.getExperimentFlag('cancel_flow', uid);
-  const enrolled = flag.enabled && !flag.isDefault && flag.experiment?.inExperiment === true;
-  if (!enrolled) return { arm: 'control', enrolled: false };
-  const value = flag.variant ?? flag.value;
-  return { arm: isArm(value) ? value : 'control', enrolled: true };
+  if (!flag.enabled || flag.isDefault) return { arm: 'control', enrolled: false };
+
+  if (flag.experiment) {
+    if (flag.experiment.inExperiment !== true) return { arm: 'control', enrolled: false };
+    const experimentValue = flag.variant ?? flag.value;
+    return { arm: isArm(experimentValue) ? experimentValue : 'control', enrolled: true };
+  }
+
+  // No running-experiment metadata means this is an ordinary flag evaluation. Use its
+  // configured feature value, not a variant bucket, and keep it out of experiment events.
+  return { arm: isArm(flag.value) ? flag.value : 'control', enrolled: false };
 }
 
 export async function getCancelArm(client: FlagsmithPort, uid: string): Promise<Arm> {

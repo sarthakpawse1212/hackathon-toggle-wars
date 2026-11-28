@@ -365,7 +365,7 @@ cancel-flow-experiment/
 
 | Route | Purpose |
 |---|---|
-| `GET /account/cancel?uid=` | Implemented. Calls async `getExperimentFlag('cancel_flow', uid)` once per in-memory flow. Only an enabled, non-default flag with `experiment.inExperiment === true` can serve a treatment; otherwise it logs the fallback and renders control. Returns accessible HTML or JSON when `Accept: application/json` is requested. |
+| `GET /account/cancel?uid=` | Implemented. Calls async `getExperimentFlag('cancel_flow', uid)` once per in-memory flow. For active experiment metadata, only an enabled, non-default flag with `experiment.inExperiment === true` can serve a treatment; a non-enrolled identity gets control. With no running-experiment metadata, an enabled, non-default flag serves its configured flag value as a normal rollout without experiment enrollment; disabled/default SDK responses get control. Returns accessible HTML or JSON when `Accept: application/json` is requested. |
 | `POST /account/cancel/action` | Implemented. Validates `{uid, action}`, enforces actions appropriate to the served arm, and tracks `subscription_retained` once only for enrolled identities who finish subscribed. |
 | `POST /account/complaint` | Implemented. Only accepts a complaint after cancellation and tracks `complaint_submitted` at most once only for enrolled identities. |
 | `GET /healthz` | Implemented liveness route. |

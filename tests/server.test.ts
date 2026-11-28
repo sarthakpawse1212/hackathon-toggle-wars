@@ -87,6 +87,24 @@ describe('cancel-flow routes', () => {
     expect(flagsmith.trackEvent).toHaveBeenCalledWith('subscription_retained', { identifier: uid });
   });
 
+  it('serves a normal pause default without marking enrollment or tracking experiment conversions', async () => {
+    const flagsmith = makeFlagsmith('pause', false);
+    vi.mocked(flagsmith.getExperimentFlag).mockResolvedValue({
+      enabled: true,
+      isDefault: false,
+      value: 'pause',
+      variant: undefined,
+      experiment: undefined,
+    });
+    const app = buildServer({ flagsmith });
+    servers.push(app);
+    const uid = 'u_default_pause';
+    const flow = await app.inject({ url: `/account/cancel?uid=${uid}`, headers: { accept: 'application/json' } });
+    expect(flow.json()).toMatchObject({ uid, arm: 'pause', enrolled: false, offer: 'Pause your subscription for one month?' });
+    await app.inject({ method: 'POST', url: '/account/cancel/action', payload: { uid, action: 'accept_pause' } });
+    expect(flagsmith.trackEvent).not.toHaveBeenCalled();
+  });
+
   it('validates actions and prevents duplicate retention events', async () => {
     const { app, flagsmith } = makeServer('pause');
     await app.inject({ url: '/account/cancel?uid=u_run_2', headers: { accept: 'application/json' } });
