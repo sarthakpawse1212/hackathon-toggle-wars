@@ -1,0 +1,6 @@
+{
+  "runId": "pilot_20261127_01",
+  "status": "failed",
+  "detail": "Request timed out after 10000 ms for identity u_pilot_20261127_01_17 (GET).",
+  "updatedAt": "2026-11-27T15:09:04.116Z"
+}

@@ -159,7 +159,7 @@ describe('simulator', () => {
     });
     const report = vi.fn();
     const fetchApi = vi.fn((_options: SimulationOptions) => createHttpApi('http://localhost:3000', 10, fetcher));
-    const exitCode = await runCli(['--users', '1', '--seed', '42', '--run-id', 'timeout', '--timeout-ms', '10'], {
+    const exitCode = await runCli(['--users', '1', '--seed', '42', '--run-id', 'timeout'], {
       outputDirectory: directory,
       apiFactory: fetchApi,
       error: report,
@@ -176,5 +176,10 @@ describe('simulator', () => {
   it('rejects unknown and duplicate CLI options', () => {
     expect(() => parseArgs(['--usersx', '2'])).toThrow(/Unknown simulator option/);
     expect(() => parseArgs(['--users', '2', '--users', '3'])).toThrow(/Duplicate simulator option/);
+  });
+
+  it('defaults to a deadline longer than the SDK retry window and rejects shorter caller deadlines', () => {
+    expect(parseArgs([]).timeoutMs).toBeGreaterThan(43_000);
+    expect(() => parseArgs(['--timeout-ms', '43000'])).toThrow(/--timeout-ms must be an integer/);
   });
 });

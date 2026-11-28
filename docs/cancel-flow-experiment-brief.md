@@ -8,14 +8,14 @@
 
 ## 0. Rules for AI agents working from this file
 
-### Current project status — 27 Nov 2026
+### Current project status — 28 Nov 2026
 
 This brief remains the project source of truth. Detailed experiment definitions live in [`docs/experiment-design.md`](experiment-design.md); implementation and local run instructions live in [`README.md`](../README.md).
 
 - Local Flagsmith Docker setup, the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants are already present. Do not recreate or alter them.
 - Phase 1 backend foundation is implemented in TypeScript/Fastify with environment validation, a Flagsmith adapter, the four requested routes, an accessible HTML view, and in-memory per-identity event de-duplication. The adapter checks `flag.experiment?.inExperiment === true`; non-enrolled identities see control, are logged, and do not emit conversions.
-- Tests mock Flagsmith. Typecheck passes and 21 tests pass across Phases 1 and 2 (13 were present at Phase 1 completion). No live exposures or conversions have been verified. No experiment has been created or started, and no dashboard configuration has been changed.
-- Results/rollout scripts and a live pilot remain future work. The seeded simulator is implemented but has not been run against the local server or Flagsmith. Experiment creation starts it immediately; creation and starting require explicit approval.
+- Tests mock Flagsmith. Phase 1 and Phase 2 are implemented. The user reports a Running local experiment and a successful 40-identity synthetic pilot at `results/pilot_20261127_012.csv`; dashboard status and events have not been independently queried in this coding task. Reported dashboard exposures were 41 while the CSV has 40 enrolled identities. A timed-out request in failed run `pilot_20261127_01` may have completed server-side; that extra exposure is possible but unconfirmed. Permanently do not reuse that ID.
+- A CSV results analyzer is implemented; it reports descriptive rates only and does not fabricate Flagsmith's win probability. The main 6,000-identity simulation has not been run. Experiment creation starts it immediately; do not create another experiment or alter existing configuration.
 - `.env`, Flagsmith credentials, and `docker-compose.yml` were not changed. `npm install` reported 6 dependency advisories (1 moderate, 3 high, 2 critical); remediation is deferred for now per the user's instruction.
 
 1. **Never invent Flagsmith APIs.** Every technical claim is tagged:
@@ -378,7 +378,7 @@ Notes:
 
 ### 8.2 Simulator
 
-Parameters: `--users 6000 --seed 42 --run-id <unique-id> --timeout-ms 10000`. The run ID is generated uniquely if omitted; explicit IDs are exclusive and may never be reused.
+Parameters: `--users 6000 --seed 42 --run-id <unique-id> --timeout-ms 50000`. The run ID is generated uniquely if omitted; explicit IDs are exclusive and may never be reused. Timeout values under 45,000 ms are rejected to leave room for the SDK's bounded retries.
 
 For each user (interleave randomly; don't run one arm first):
 1. Draw persona from the mix (seeded).
@@ -388,15 +388,15 @@ For each user (interleave randomly; don't run one arm first):
 5. If cancelled, draw `P(complaint | persona, arm)` → maybe `POST` complaint.
 6. Log the raw outcome row to `results/<run-id>.csv` (uid, persona, arm, enrolled, retained, complaint, `simulated=true`).
 
-At the end: flush events, wait ~1 minute, refresh results (≤ once per 5 min), fetch results.
+The API buffers events and flushes at shutdown. After the simulator completes, stop the API gracefully with Ctrl+C so `close()` can flush; wait about one minute before reviewing Flagsmith results, and refresh no more often than once per five minutes.
 
 **Rule:** the persona model **must not know the arm in advance** — the arm is whatever Flagsmith served. Otherwise the experiment is theatre.
 
-### 8.3 Results script
+### 8.3 Results analysis
 
-- Refresh and fetch results; print per-arm retained/complaint rates, win probabilities, credible intervals.
-- Compare against the expected ground-truth table computed from `config/personas.ts`; flag mismatches > tolerance.
-- Export JSON to `results/`.
+- Run `npm run analyze -- --csv results/<completed-run>.csv` to validate the completed reservation and CSV, then print per-arm enrolled counts, descriptive retention/complaint rates, lifts, and guardrail status. A JSON report is written beside the CSV and is not overwritten.
+- The local analyzer cannot read Flagsmith Bayesian results and reports win probability as unavailable. Review win probability, credible intervals, refresh time, and sample-ratio mismatch in the running experiment's Flagsmith UI. Do not treat modeled outcome rates as real behavior or statistical confidence.
+- The 6,000-identity run is a total sample, not a guarantee of 2,000 per arm: at 33% each, the expected pause and discount counts are about 1,980 apiece, with random allocation variation.
 
 ### 8.4 Bootstrap script
 
@@ -440,10 +440,10 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 - [x] Implement `/healthz`, `/account/cancel`, `/account/cancel/action`, and `/account/complaint`, including JSON and accessible HTML, validation, same-identity use, and in-memory duplicate prevention.
 - [x] Run `npm run typecheck` and `npm test`: typecheck passes; 13 unit tests pass with Flagsmith mocked, including enrollment suppression and identity checks.
 - [ ] Commit the project files. Current worktree has uncommitted changes; the design document is not yet a commit.
-- [ ] Run a 5–10 identity live pilot and verify events in Flagsmith. This is approval-gated because the experiment must be created and starts immediately; no experiment has been created or started.
+- [x] User reports the experiment is running and a 40-identity synthetic pilot completed; dashboard event counts are not independently verified here.
 - [ ] Create the experiment setup script. **Do not implement this as part of Phase 1**: existing project/flag/variants must be reused, and no setup script may create an experiment without explicit approval.
 
-**Phase 1 status (27 Nov 2026):** backend and mocked verification, including enrollment protection, are complete. Live Flagsmith exposure/conversion verification remains outstanding and must not be claimed yet.
+**Phase 1 status (28 Nov 2026):** backend and mocked verification, including enrollment protection, are complete. The user reports a live local experiment and pilot; this repository review did not query Flagsmith, so its exposure/conversion counts remain user-reported.
 
 ### Phase 2 — Persona model and simulator (hours 6–20)
 - [x] Accessible HTML for control/pause/discount with equal cancellation button styling and one-click cancellation.
@@ -451,12 +451,16 @@ Capture screenshots/GIFs of the Flagsmith pages **while running**, so no re-runs
 - [x] `src/model.ts` + `config/personas.ts` with deterministic sampling and probability convergence tests.
 - [x] `scripts/simulate.ts` with seeded RNG, shuffled request order, synthetic identities, and labeled CSV outcomes.
 - [x] Simulator requests the served arm from the server and records enrollment separately; fallback identities are excluded from outcome rates.
-- [ ] Pilot run (~300 users): check split, event counts, flushing. Depends on approval to start the experiment.
+- [x] User-reported 40-identity synthetic pilot; 6,000-identity main simulation remains pending.
 
-**Phase 2 status (27 Nov 2026):** the model and simulator are implemented and covered by unit tests. They have not been run against the local server or Flagsmith. A live pilot remains approval-gated; no experiment has been created or started.
+**Phase 2 status (28 Nov 2026):** the model and simulator are implemented and covered by unit tests. The user reports the 40-identity pilot completed against the running local experiment. The run `pilot_20261127_01` failed on a timed-out request and is permanently non-reusable. The reported 41 dashboard exposures versus 40 enrolled CSV rows may include a server-side completion of that timed-out request, but this is unconfirmed. The main run is pending.
 
-### Phase 3 — Real run (hours 20–36)
-- [ ] Start the experiment; run 2,000–3,000 users per arm.
+**Timeout policy:** installed SDK source supports a 10-second request timeout, three retries, and a 1-second retry delay (43 seconds maximum total); the application configures those values explicitly. Simulator requests remain serial. The caller deadline defaults to 50 seconds and rejects values below 45 seconds. This prevents the caller from aborting before the SDK's bounded retry window ends. The underlying cause of the earlier timeout is not established.
+
+**Results analysis:** `npm run analyze -- --csv results/<completed-run>.csv` validates the CSV and completed reservation marker, excludes non-enrolled rows, writes a terminal report and a non-overwriting `.analysis.json` file, and labels the results synthetic. CSV rates are descriptive. Flagsmith win probability is unavailable from this CSV and must be reviewed in the dashboard; do not call a winner without meeting the registered 95% rule.
+
+### Phase 3 — Main simulation and experiment review (hours 20–36)
+- [ ] Run the planned 6,000 synthetic identities with a new unique run ID; never reuse `pilot_20261127_01` or either pilot ID.
 - [ ] Wait ≥ 1 min, refresh results (≥ 5 min between refreshes); confirm split ≈ 33/33/34, no SRM.
 - [ ] `results.ts` compares with ground truth; fix any bug (most likely: identity mismatch, event naming, flushing).
 

@@ -2,7 +2,7 @@
 
 Use this guide to verify the local Flagsmith setup for the Cancel-Flow Experiment.
 
-**Current status (27 Nov 2026):** the user reports local setup is complete and the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants already exist. This guide is now for verification and recovery. Do not recreate or alter existing Flagsmith resources. The individual live dashboard/CLI checks below were not re-run in this review.
+**Current status (28 Nov 2026):** the user reports local setup is complete, the experiment is Running, and the `cancel-flow` project, `cancel_flow` flag, and `control`/`pause`/`discount` variants already exist. The user also reports a successful 40-identity synthetic pilot. These dashboard states were not independently re-verified during this code review. This guide is for verification and recovery; do not recreate or alter existing Flagsmith resources.
 
 ## 1. Prerequisites
 
@@ -240,7 +240,7 @@ docker compose down -v
 
 ## 9. Local setup completion checklist
 
-The user reports that local setup is complete. Treat this list as a manual verification checklist; unmarked items were not independently verified in the latest review.
+The user reports the setup and experiment are running. Treat this list as a manual verification checklist; the current dashboard state was not independently verified in this code review.
 
 - [ ] Docker Desktop is running.
 - [ ] Flagsmith containers are running.
@@ -252,7 +252,8 @@ The user reports that local setup is complete. Treat this list as a manual verif
 - [ ] CLI points to `http://localhost:8000`.
 - [ ] `flagsmith project list` shows `cancel-flow`.
 - [ ] CLI is initialized for the correct environment.
-- [ ] `cancel_flow` flag exists with `pause` and `discount` variants.
+- [x] User reports `cancel_flow` exists with `control`, `pause`, and `discount` variants.
+- [x] User reports the experiment is Running and a 40-identity synthetic pilot completed.
 - [ ] Application `.env` contains the local SDK URLs and server-side environment key.
 - [ ] `.env` is ignored by Git.
 

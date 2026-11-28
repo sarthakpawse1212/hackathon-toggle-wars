@@ -1,0 +1,64 @@
+{
+  "disclosure": "Synthetic identities and modeled behavior; descriptive rates are not real customer evidence.",
+  "runId": "run_564d7534-6650-4d55-96d5-b51cadb33031",
+  "totalRows": 6100,
+  "enrolledIdentities": 6100,
+  "dataCompleteness": "all_arms_have_enrolled_identities",
+  "arms": {
+    "control": {
+      "assigned": 2086,
+      "enrolled": 2086,
+      "retained": {
+        "numerator": 188,
+        "denominator": 2086,
+        "rate": 0.09012464046021093
+      },
+      "complaints": {
+        "numerator": 40,
+        "denominator": 2086,
+        "rate": 0.019175455417066157
+      },
+      "retentionLiftPercentagePoints": 0,
+      "complaintDifferencePercentagePoints": 0,
+      "passesComplaintGuardrail": true
+    },
+    "pause": {
+      "assigned": 1973,
+      "enrolled": 1973,
+      "retained": {
+        "numerator": 592,
+        "denominator": 1973,
+        "rate": 0.3000506842372022
+      },
+      "complaints": {
+        "numerator": 60,
+        "denominator": 1973,
+        "rate": 0.030410542321338063
+      },
+      "retentionLiftPercentagePoints": 20.992604377699127,
+      "complaintDifferencePercentagePoints": 1.1235086904271905,
+      "passesComplaintGuardrail": true
+    },
+    "discount": {
+      "assigned": 2041,
+      "enrolled": 2041,
+      "retained": {
+        "numerator": 620,
+        "denominator": 2041,
+        "rate": 0.30377266046055856
+      },
+      "complaints": {
+        "numerator": 115,
+        "denominator": 2041,
+        "rate": 0.056344928956393925
+      },
+      "retentionLiftPercentagePoints": 21.364802000034764,
+      "complaintDifferencePercentagePoints": 3.716947353932777,
+      "passesComplaintGuardrail": false
+    }
+  },
+  "flagsmithWinProbability": null,
+  "flagsmithStatisticalResult": "unavailable_from_csv",
+  "descriptiveBestEligibleTreatment": "pause",
+  "decision": "No statistically confirmed winner: CSV does not contain Flagsmith win probability. Review the running experiment in Flagsmith; the descriptive best eligible treatment is not a decision."
+}

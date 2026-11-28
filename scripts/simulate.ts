@@ -5,8 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { choosePersona, createSeededRandom, shuffle, simulateOutcome } from '../src/model.js';
 import { ARMS, type Arm } from '../src/experiment.js';
 import type { Persona } from '../config/personas.js';
+import { SIMULATOR_DEFAULT_TIMEOUT_MS, SIMULATOR_MIN_TIMEOUT_MS } from '../src/timeout-policy.js';
 
-export const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = SIMULATOR_DEFAULT_TIMEOUT_MS;
 const MAX_TIMEOUT_MS = 300_000;
 
 export interface SimulationOptions { users: number; seed: number; runId: string; baseUrl: string; timeoutMs: number }
@@ -51,8 +52,8 @@ export function parseArgs(args: string[]): SimulationOptions {
   if (!Number.isInteger(users) || users < 1 || users > 100_000) throw new Error('--users must be an integer from 1 to 100000.');
   if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xFFFFFFFF) throw new Error('--seed must be an unsigned 32-bit integer.');
   if (!/^[A-Za-z0-9_-]+$/.test(runId)) throw new Error('--run-id may contain only letters, numbers, underscores, and hyphens.');
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) {
-    throw new Error(`--timeout-ms must be an integer from 1 to ${MAX_TIMEOUT_MS}.`);
+  if (!Number.isInteger(timeoutMs) || timeoutMs < SIMULATOR_MIN_TIMEOUT_MS || timeoutMs > MAX_TIMEOUT_MS) {
+    throw new Error(`--timeout-ms must be an integer from ${SIMULATOR_MIN_TIMEOUT_MS} to ${MAX_TIMEOUT_MS}.`);
   }
   const url = new URL(baseUrl);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {

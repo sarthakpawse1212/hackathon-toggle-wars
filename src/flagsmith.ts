@@ -1,6 +1,11 @@
 import { Flagsmith } from '@flagsmith/nodejs';
 import type { AppConfig } from './config.js';
 import { isArm, type Arm } from './experiment.js';
+import {
+  FLAGSMITH_REQUEST_TIMEOUT_SECONDS,
+  FLAGSMITH_RETRIES,
+  FLAGSMITH_RETRY_DELAY_MS,
+} from './timeout-policy.js';
 
 export interface EvaluatedExperimentFlag {
   enabled: boolean;
@@ -26,6 +31,9 @@ export function createFlagsmith(config: AppConfig): Flagsmith {
     environmentKey: config.FLAGSMITH_SERVER_KEY,
     enableEvents: true,
     apiUrl: config.FLAGSMITH_SDK_API_URL,
+    requestTimeoutSeconds: FLAGSMITH_REQUEST_TIMEOUT_SECONDS,
+    retries: FLAGSMITH_RETRIES,
+    requestRetryDelayMilliseconds: FLAGSMITH_RETRY_DELAY_MS,
     eventProcessorConfig: { eventsApiUrl: config.FLAGSMITH_EVENTS_URL },
   });
 }
